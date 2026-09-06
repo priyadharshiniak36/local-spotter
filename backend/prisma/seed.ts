@@ -132,29 +132,46 @@ async function main() {
       averageRating: 4.8,
       ratingCount: 12,
       followerCount: 145,
-      subscription: {
-        create: {
-          planId: workshopPlan.id,
-          status: SubscriptionStatus.ACTIVE,
-          currentPeriodStart: new Date(),
-          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        },
-      },
-      hours: {
-        createMany: {
-          data: [
-            { dayOfWeek: 1, openTime: '09:00', closeTime: '18:00', isClosed: false },
-            { dayOfWeek: 2, openTime: '09:00', closeTime: '18:00', isClosed: false },
-            { dayOfWeek: 3, openTime: '09:00', closeTime: '18:00', isClosed: false },
-            { dayOfWeek: 4, openTime: '09:00', closeTime: '20:00', isClosed: false },
-            { dayOfWeek: 5, openTime: '09:00', closeTime: '18:00', isClosed: false },
-            { dayOfWeek: 6, openTime: '10:00', closeTime: '17:00', isClosed: false },
-            { dayOfWeek: 0, openTime: null, closeTime: null, isClosed: true },
-          ],
-        },
-      },
     },
   });
+
+  await prisma.businessSubscription.upsert({
+    where: { businessId: business1.id },
+    update: {},
+    create: {
+      businessId: business1.id,
+      planId: workshopPlan.id,
+      status: SubscriptionStatus.ACTIVE,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const businessHours = [
+    { dayOfWeek: 1, openTime: '09:00', closeTime: '18:00', isClosed: false },
+    { dayOfWeek: 2, openTime: '09:00', closeTime: '18:00', isClosed: false },
+    { dayOfWeek: 3, openTime: '09:00', closeTime: '18:00', isClosed: false },
+    { dayOfWeek: 4, openTime: '09:00', closeTime: '20:00', isClosed: false },
+    { dayOfWeek: 5, openTime: '09:00', closeTime: '18:00', isClosed: false },
+    { dayOfWeek: 6, openTime: '10:00', closeTime: '17:00', isClosed: false },
+    { dayOfWeek: 0, openTime: null, closeTime: null, isClosed: true },
+  ];
+
+  for (const hours of businessHours) {
+    await prisma.businessHours.upsert({
+      where: {
+        businessId_dayOfWeek: {
+          businessId: business1.id,
+          dayOfWeek: hours.dayOfWeek,
+        },
+      },
+      update: {},
+      create: {
+        businessId: business1.id,
+        ...hours,
+      },
+    });
+  }
 
   // 6. Create Product Category & Products
   console.log('📦 Seeding Products...');
@@ -164,8 +181,15 @@ async function main() {
     create: { name: 'Kleding', slug: 'kleding' },
   });
 
-  const product1 = await prisma.product.create({
-    data: {
+  const product1 = await prisma.product.upsert({
+    where: {
+      businessId_slug: {
+        businessId: business1.id,
+        slug: 'handgemaakte-leren-shopper',
+      },
+    },
+    update: {},
+    create: {
       businessId: business1.id,
       categoryId: prodCategoryClothing.id,
       name: 'Handgemaakte Leren Shopper',
@@ -184,6 +208,26 @@ async function main() {
       },
     },
   });
+
+  const productVariants = [
+    { color: 'Zwart', sku: 'SHOPPER-BLK', price: 149.95, stock: 8 },
+    { color: 'Bruin', sku: 'SHOPPER-BRN', price: 149.95, stock: 7 },
+  ];
+
+  for (const variant of productVariants) {
+    const existingVariant = await prisma.productVariant.findFirst({
+      where: { productId: product1.id, sku: variant.sku },
+    });
+
+    if (!existingVariant) {
+      await prisma.productVariant.create({
+        data: {
+          productId: product1.id,
+          ...variant,
+        },
+      });
+    }
+  }
 
   // 7. Create Consumer User & Profile
   console.log('🛍️ Seeding Consumer User...');
@@ -211,8 +255,15 @@ async function main() {
 
   // 8. Create Workshop
   console.log('🎨 Seeding Workshop...');
-  await prisma.workshop.create({
-    data: {
+  await prisma.workshop.upsert({
+    where: {
+      businessId_slug: {
+        businessId: business1.id,
+        slug: 'ambachtelijk-leerbewerken-workshop',
+      },
+    },
+    update: {},
+    create: {
       businessId: business1.id,
       title: 'Ambachtelijk Leerbewerken Workshop',
       slug: 'ambachtelijk-leerbewerken-workshop',
@@ -231,36 +282,67 @@ async function main() {
 
   // 9. Create Shop Route
   console.log('🗺️ Seeding Shop Route...');
-  await prisma.shopRoute.create({
-    data: {
+  const shopRoute = await prisma.shopRoute.upsert({
+    where: {
+      businessId_slug: {
+        businessId: business1.id,
+        slug: 'jordaan-ambacht-design-route',
+      },
+    },
+    update: {},
+    create: {
       businessId: business1.id,
       title: 'Jordaan Ambacht & Design Route',
       slug: 'jordaan-ambacht-design-route',
       description: 'Wandel langs de leukste ambachtelijke boetieks en ateliers in de Jordaan.',
       city: 'Amsterdam',
       status: RouteStatus.PUBLISHED,
-      stops: {
-        create: [
-          { businessId: business1.id, title: 'Boetiek Amsterdam', description: 'Startpunt met koffie en ambachtelijk leer', sequence: 1, latitude: 52.3752, longitude: 4.8851 },
-          { businessId: business1.id, title: 'Atelier de Herengracht', description: 'Keramiek en handgemaakt servies', sequence: 2, latitude: 52.3735, longitude: 4.8870 },
-        ],
+    },
+  });
+
+  await prisma.routeStop.upsert({
+    where: {
+      routeId_sequence: {
+        routeId: shopRoute.id,
+        sequence: 1,
       },
+    },
+    update: {},
+    create: {
+      routeId: shopRoute.id,
+      businessId: business1.id,
+      title: 'Boetiek Amsterdam',
+      description: 'Startpunt met koffie en ambachtelijk leer',
+      sequence: 1,
+      latitude: 52.3752,
+      longitude: 4.8851,
     },
   });
 
   // 10. Create Review
   console.log('⭐ Seeding Review...');
-  await prisma.review.create({
-    data: {
+  const existingReview = await prisma.review.findFirst({
+    where: {
       businessId: business1.id,
       consumerProfileId: consumerUser.consumerProfile!.id,
       productId: product1.id,
-      rating: 5,
       title: 'Prachtige kwaliteit tas!',
-      comment: 'Super snelle verzending en het leer is ontzettend mooi afgewerkt.',
-      status: ReviewStatus.PUBLISHED,
     },
   });
+
+  if (!existingReview) {
+    await prisma.review.create({
+      data: {
+        businessId: business1.id,
+        consumerProfileId: consumerUser.consumerProfile!.id,
+        productId: product1.id,
+        rating: 5,
+        title: 'Prachtige kwaliteit tas!',
+        comment: 'Super snelle verzending en het leer is ontzettend mooi afgewerkt.',
+        status: ReviewStatus.PUBLISHED,
+      },
+    });
+  }
 
   console.log('✅ Seed completed successfully!');
 }
