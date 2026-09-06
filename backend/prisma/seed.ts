@@ -50,14 +50,24 @@ async function main() {
   });
 
   // 2. Create Super Admin User
+  // Login credentials for the Super Admin portal:
+  //   username: Admin
+  //   password: Admin@123
+  // (also reachable via email admin@localspotter.nl with the same password)
   console.log('👤 Seeding Super Admin User...');
+  const adminPasswordHash = await bcrypt.hash('Admin@123', 10);
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@localspotter.nl' },
-    update: {},
+    update: {
+      username: 'Admin',
+      passwordHash: adminPasswordHash,
+      status: UserStatus.ACTIVE,
+    },
     create: {
       email: 'admin@localspotter.nl',
+      username: 'Admin',
       mobile: '+31612345678',
-      passwordHash,
+      passwordHash: adminPasswordHash,
       role: UserRole.SUPER_ADMIN,
       status: UserStatus.ACTIVE,
       emailVerifiedAt: new Date(),

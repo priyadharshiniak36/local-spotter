@@ -42,15 +42,10 @@ export class UpdateBusinessDto {
   @IsString()
   city?: string;
 
-  @ApiPropertyOptional({ example: 'Keizersgracht' })
+  @ApiPropertyOptional({ example: 'Keizersgracht 142, 1015 CX Amsterdam' })
   @IsOptional()
   @IsString()
-  street?: string;
-
-  @ApiPropertyOptional({ example: '142' })
-  @IsOptional()
-  @IsString()
-  houseNumber?: string;
+  address?: string;
 
   @ApiPropertyOptional({ example: '1015 CX' })
   @IsOptional()

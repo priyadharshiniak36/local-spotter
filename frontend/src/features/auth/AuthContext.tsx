@@ -1,115 +1,165 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { User, UserRole } from "@/types/user";
+import { apiClient, setToken, getToken, ApiError } from "@/lib/api/client";
+
+interface BackendUser {
+  id: string;
+  email?: string;
+  username?: string;
+  mobile?: string;
+  role: UserRole;
+  status: "ACTIVE" | "PENDING_VERIFICATION" | "SUSPENDED" | "DELETED";
+  displayName?: string;
+  profileId?: string;
+  createdAt: string;
+}
+
+function mapBackendUser(u: BackendUser): User {
+  return {
+    id: u.id,
+    name: u.displayName || u.email || u.username || u.mobile || "User",
+    email: u.email,
+    username: u.username,
+    phone: u.mobile,
+    role: u.role,
+    createdAt: u.createdAt,
+  };
+}
+
+interface RegisterPayload {
+  email?: string;
+  phone?: string;
+  password: string;
+  role: UserRole;
+  displayName: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+interface PendingVerification {
+  identifier: string;
+  channel: "EMAIL" | "MOBILE";
+  intendedRole: UserRole;
+}
 
 interface AuthContextType {
   user: User | null;
   role: UserRole;
-  setRole: (role: UserRole, userData?: Partial<User>) => void;
   isAuthenticated: boolean;
-  login: (identifier: string, role?: UserRole) => void;
+  isLoading: boolean;
+  pendingVerification: PendingVerification | null;
+  /** Logs in with an email, mobile number, or username (admins use username). */
+  login: (identifier: string, password: string) => Promise<User>;
+  register: (payload: RegisterPayload) => Promise<void>;
+  verifyCode: (code: string) => Promise<User>;
+  resendCode: () => Promise<void>;
   logout: () => void;
 }
 
-const STORAGE_KEY = "localspotter-user";
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const readStoredUser = (): User | null => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as User) : null;
-  } catch {
-    return null;
-  }
-};
-
-const buildUser = (identifier: string, role: UserRole): User => {
-  const trimmed = identifier.trim();
-  const email = trimmed.includes("@") ? trimmed : `${trimmed}@localspotter.nl`;
-  const displayName = trimmed.includes("@")
-    ? trimmed.split("@")[0].replace(/[._-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
-    : trimmed.replace(/\s+/g, " ").trim() || "Local Spotter User";
-
-  return {
-    id: `user-${Math.random().toString(36).slice(2, 10)}`,
-    name: displayName,
-    email,
-    role,
-    createdAt: new Date().toISOString(),
-  };
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [role, setRoleState] = useState<UserRole>(() => readStoredUser()?.role ?? "PUBLIC");
-  const [user, setUser] = useState<User | null>(() => readStoredUser());
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pendingVerification, setPendingVerification] = useState<PendingVerification | null>(null);
 
-  const syncUserState = (nextRole: UserRole, nextUser: User | null) => {
-    setRoleState(nextRole);
-    setUser(nextUser);
+  const hydrate = useCallback(async () => {
+    const token = getToken();
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+    try {
+      const me = await apiClient.get<BackendUser>("/auth/me");
+      setUser(mapBackendUser(me));
+    } catch {
+      setToken(null);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-    if (typeof window !== "undefined") {
-      if (!nextUser) {
-        window.localStorage.removeItem(STORAGE_KEY);
-        return;
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  const login = useCallback(async (identifier: string, password: string) => {
+    const res = await apiClient.post<{ accessToken: string; user: BackendUser }>(
+      "/auth/login",
+      { identifier, password },
+      { auth: false }
+    );
+    setToken(res.accessToken);
+    const mapped = mapBackendUser(res.user);
+    setUser(mapped);
+    return mapped;
+  }, []);
+
+  const register = useCallback(async (payload: RegisterPayload) => {
+    const res = await apiClient.post<{
+      pendingVerification: boolean;
+      verificationChannel: "EMAIL" | "MOBILE";
+      identifier: string;
+    }>("/auth/register", payload, { auth: false });
+
+    setPendingVerification({
+      identifier: res.identifier,
+      channel: res.verificationChannel,
+      intendedRole: payload.role,
+    });
+  }, []);
+
+  const verifyCode = useCallback(
+    async (code: string) => {
+      if (!pendingVerification) {
+        throw new ApiError("Geen verificatie in behandeling", 400, null);
       }
-
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
-    }
-  };
-
-  const setRole = (newRole: UserRole, userData?: Partial<User>) => {
-    if (newRole === "PUBLIC") {
-      syncUserState("PUBLIC", null);
-      return;
-    }
-
-    const previousUser = user ?? readStoredUser();
-    const nextUser = {
-      id: userData?.id ?? previousUser?.id ?? `user-${Math.random().toString(36).slice(2, 10)}`,
-      name: userData?.name ?? previousUser?.name ?? "Local Spotter User",
-      email: userData?.email ?? previousUser?.email ?? "user@localspotter.nl",
-      phone: userData?.phone ?? previousUser?.phone,
-      role: newRole,
-      avatarUrl: userData?.avatarUrl ?? previousUser?.avatarUrl,
-      createdAt: userData?.createdAt ?? previousUser?.createdAt ?? new Date().toISOString(),
-    } satisfies User;
-
-    syncUserState(newRole, nextUser);
-  };
-
-  const login = (identifier: string, selectedRole: UserRole = "CONSUMER") => {
-    const trimmedIdentifier = identifier.trim();
-    if (!trimmedIdentifier) {
-      syncUserState("PUBLIC", null);
-      return;
-    }
-
-    const nextUser = buildUser(trimmedIdentifier, selectedRole);
-    syncUserState(selectedRole, nextUser);
-  };
-
-  const logout = () => {
-    syncUserState("PUBLIC", null);
-  };
-
-  const value = useMemo<AuthContextType>(
-    () => ({
-      user,
-      role,
-      setRole,
-      isAuthenticated: role !== "PUBLIC",
-      login,
-      logout,
-    }),
-    [role, user]
+      const res = await apiClient.post<{ accessToken: string; user: BackendUser }>(
+        "/auth/verify-code",
+        { identifier: pendingVerification.identifier, code },
+        { auth: false }
+      );
+      setToken(res.accessToken);
+      const mapped = mapBackendUser(res.user);
+      setUser(mapped);
+      setPendingVerification(null);
+      return mapped;
+    },
+    [pendingVerification]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const resendCode = useCallback(async () => {
+    if (!pendingVerification) return;
+    await apiClient.post("/auth/resend-code", { identifier: pendingVerification.identifier }, { auth: false });
+  }, [pendingVerification]);
+
+  const logout = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    setPendingVerification(null);
+  }, []);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        role: user?.role ?? "PUBLIC",
+        isAuthenticated: !!user,
+        isLoading,
+        pendingVerification,
+        login,
+        register,
+        verifyCode,
+        resendCode,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {

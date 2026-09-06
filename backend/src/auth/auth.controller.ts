@@ -5,6 +5,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { VerifyCodeDto, ResendCodeDto } from './dto/verify-code.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -22,10 +23,24 @@ export class AuthController {
   }
 
   @Post('login')
-  @ApiOperation({ summary: 'Authenticate user with email and password' })
+  @ApiOperation({ summary: 'Authenticate user with email/mobile/username and password' })
   @ApiResponse({ status: 200, description: 'Login successful.', type: AuthResponseDto })
   async login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Post('verify-code')
+  @ApiOperation({ summary: 'Confirm the OTP/email code sent at registration and activate the account' })
+  @ApiResponse({ status: 200, description: 'Account verified, access token issued.', type: AuthResponseDto })
+  async verifyCode(@Body() dto: VerifyCodeDto) {
+    return this.authService.verifyCode(dto.identifier, dto.code);
+  }
+
+  @Post('resend-code')
+  @ApiOperation({ summary: 'Resend the OTP/email verification code' })
+  @ApiResponse({ status: 200, description: 'Code resent if account exists and is unverified.' })
+  async resendCode(@Body() dto: ResendCodeDto) {
+    return this.authService.resendVerificationCode(dto.identifier);
   }
 
   @Get('me')

@@ -12,7 +12,7 @@ export const ConsumerLayout: React.FC<{ children: React.ReactNode }> = ({ childr
         <AppHeader />
       </div>
       <TopNav />
-
+      
       <main className="flex-1 max-w-7xl w-full mx-auto pb-28 md:pb-12 px-4 md:px-6 pt-4">
         {children}
       </main>

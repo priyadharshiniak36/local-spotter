@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { OwnerLayout } from "@/layouts/OwnerLayout";
 import { Button } from "@/components/ui/Button";
+import { SubscriptionBadge, SubscriptionTier } from "@/components/ui/SubscriptionBadge";
 import { ProductCard } from "@/components/cards/ProductCard";
 import { WorkshopCard } from "@/components/cards/WorkshopCard";
 import { LoadingState } from "@/components/feedback/LoadingState";
@@ -25,26 +26,41 @@ import { api } from "@/lib/api";
 import { Business } from "@/types/business";
 import { Product } from "@/types/product";
 import { Workshop } from "@/types/workshop";
+import { Order } from "@/types/order";
 import { formatCurrency } from "@/lib/utils";
+
+const ORDER_STATUS_TILES: { statuses: import("@/types/order").OrderStatus[]; label: string; className: string }[] = [
+  { statuses: ["CONFIRMED", "PREPARING"], label: "Processing", className: "ls-status-processing" },
+  { statuses: ["DELIVERED"], label: "Completed", className: "ls-status-completed" },
+  { statuses: ["OUT_FOR_DELIVERY"], label: "On the way", className: "ls-status-ontheway" },
+  { statuses: ["CANCELLED", "REJECTED"], label: "Cancelled", className: "ls-status-cancelled" },
+  { statuses: ["PENDING"], label: "New Orders", className: "ls-status-new col-span-2 sm:col-span-1" },
+];
 
 export default function OwnerDashboardPage() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function loadOwnerData() {
       setIsLoading(true);
+      // TODO: replace "bus-1" with the authenticated owner's real business
+      // id (from useAuth()/GET /businesses/me) once the owner portal is
+      // fully wired to the backend — see PROMPT.md item 9.
       const b = await api.getBusinessById("bus-1");
       setBusiness(b);
       if (b) {
-        const [prods, ws] = await Promise.all([
+        const [prods, ws, ords] = await Promise.all([
           api.getProducts({ businessId: b.id }),
           api.getWorkshops({ businessId: b.id }),
+          api.getOrders({ businessId: b.id }),
         ]);
         setProducts(prods);
         setWorkshops(ws);
+        setOrders(ords);
       }
       setIsLoading(false);
     }
@@ -70,8 +86,8 @@ export default function OwnerDashboardPage() {
             {business.heroImageUrl && (
               <Image src={business.heroImageUrl} alt={business.name} fill className="object-cover" />
             )}
-            <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs px-3 py-1 rounded-full text-xs font-bold text-[#FA1EFF] flex items-center gap-1 shadow-xs">
-              <Crown className="w-3.5 h-3.5" /> Plan: Workshop (€150/mnd)
+            <div className="absolute top-3 right-3">
+              <SubscriptionBadge tier={(business.subscriptionTier as SubscriptionTier) || "WEBSHOP"} />
             </div>
           </div>
 
@@ -106,28 +122,21 @@ export default function OwnerDashboardPage() {
           </div>
         </div>
 
-        {/* Status Metrics Cards matching Figma 457:3591 */}
+        {/* Status Metrics Cards — real counts derived from this business's orders, not hardcoded (PROMPT.md item 9) */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <Link href="/owner/orders" className="p-3.5 rounded-2xl ls-status-processing flex flex-col justify-between h-24 hover:scale-[1.02] transition-transform">
-            <span className="text-[11px] font-bold">Processing</span>
-            <span className="text-2xl font-extrabold font-rubik">3</span>
-          </Link>
-          <Link href="/owner/orders" className="p-3.5 rounded-2xl ls-status-completed flex flex-col justify-between h-24 hover:scale-[1.02] transition-transform">
-            <span className="text-[11px] font-bold">Completed</span>
-            <span className="text-2xl font-extrabold font-rubik">18</span>
-          </Link>
-          <Link href="/owner/orders" className="p-3.5 rounded-2xl ls-status-ontheway flex flex-col justify-between h-24 hover:scale-[1.02] transition-transform">
-            <span className="text-[11px] font-bold">On the way</span>
-            <span className="text-2xl font-extrabold font-rubik">2</span>
-          </Link>
-          <Link href="/owner/orders" className="p-3.5 rounded-2xl ls-status-cancelled flex flex-col justify-between h-24 hover:scale-[1.02] transition-transform">
-            <span className="text-[11px] font-bold">Cancelled</span>
-            <span className="text-2xl font-extrabold font-rubik">1</span>
-          </Link>
-          <Link href="/owner/orders" className="p-3.5 rounded-2xl ls-status-new flex flex-col justify-between h-24 col-span-2 sm:col-span-1 hover:scale-[1.02] transition-transform">
-            <span className="text-[11px] font-bold">New Orders</span>
-            <span className="text-2xl font-extrabold font-rubik">4</span>
-          </Link>
+          {ORDER_STATUS_TILES.map((tile) => {
+            const count = orders.filter((o) => tile.statuses.includes(o.status)).length;
+            return (
+              <Link
+                key={tile.label}
+                href="/owner/orders"
+                className={`p-3.5 rounded-2xl ${tile.className} flex flex-col justify-between h-24 hover:scale-[1.02] transition-transform`}
+              >
+                <span className="text-[11px] font-bold">{tile.label}</span>
+                <span className="text-2xl font-extrabold font-rubik">{count}</span>
+              </Link>
+            );
+          })}
         </div>
 
         {/* My Products Section */}

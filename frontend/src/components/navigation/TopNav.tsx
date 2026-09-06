@@ -5,10 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search, ShoppingBag, MapPin, Calendar, Store, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthContext";
+import { useCart } from "@/features/cart/CartContext";
+import { LanguageSwitcher } from "@/components/ui/LanguageSwitcher";
 
 export const TopNav: React.FC = () => {
   const pathname = usePathname();
   const { user, role, isAuthenticated } = useAuth();
+  const { itemCount } = useCart();
 
   const navLinks = [
     { label: "Products", href: "/products", icon: ShoppingBag },
@@ -51,15 +54,19 @@ export const TopNav: React.FC = () => {
 
         {/* User / Dashboard Action */}
         <div className="flex items-center gap-3">
+          <LanguageSwitcher />
+
           <Link
             href="/cart"
             className="p-2 rounded-full bg-white/80 hover:bg-white transition-colors relative shadow-2xs"
             aria-label="Shopping Cart"
           >
             <ShoppingBag className="w-5 h-5 text-[#0A182E]" />
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#EA89B1] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
-              1
-            </span>
+            {itemCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-4 h-4 px-0.5 bg-[#EA89B1] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                {itemCount > 99 ? "99+" : itemCount}
+              </span>
+            )}
           </Link>
 
           {role === "BUSINESS_OWNER" && (
@@ -92,12 +99,17 @@ export const TopNav: React.FC = () => {
           ) : (
             <Link
               href="/account"
-              className="flex items-center gap-2 p-1.5 pr-3 bg-white rounded-full border border-white/80 shadow-xs hover:border-[#EA89B1] transition-all"
+              className="flex items-center gap-2 p-1.5 pr-3 w-fit bg-white rounded-full border border-white/80 shadow-xs hover:border-[#EA89B1] transition-all"
             >
-              <div className="w-7 h-7 rounded-full bg-[#0A182E] text-white flex items-center justify-center text-xs font-bold">
-                {user?.name?.charAt(0)}
+              <div className="w-7 h-7 shrink-0 rounded-full bg-[#0A182E] text-white flex items-center justify-center text-xs font-bold overflow-hidden">
+                {user?.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  user?.name?.charAt(0).toUpperCase()
+                )}
               </div>
-              <span className="text-xs font-bold text-[#0A182E]">{user?.name}</span>
+              <span className="text-xs font-bold text-[#0A182E] whitespace-nowrap">{user?.name}</span>
             </Link>
           )}
         </div>

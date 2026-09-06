@@ -3,10 +3,11 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, X, Check, Plus, AlertCircle } from "lucide-react";
+import { ArrowLeft, X, Check, Plus, AlertCircle } from "lucide-react";
 import { OwnerLayout } from "@/layouts/OwnerLayout";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { ImageUploader } from "@/components/ui/ImageUploader";
 import { ProductSize } from "@/types/product";
 import { api } from "@/lib/api";
 
@@ -22,9 +23,9 @@ export default function AddProductPage() {
   const [externalUrl, setExternalUrl] = useState("");
 
   const [selectedSizes, setSelectedSizes] = useState<ProductSize[]>(["M", "L"]);
-  const [images, setImages] = useState<string[]>([
-    "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=600&q=80",
-  ]);
+  // Files the user has manually picked via ImageUploader — nothing is
+  // uploaded to storage until this form is submitted (PROMPT.md items 7 & 8).
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -37,32 +38,10 @@ export default function AddProductPage() {
     );
   };
 
-  const handleAddSampleImage = () => {
-    if (images.length >= 3) {
-      setError("Maximaal 3 afbeeldingen toegestaan per product.");
-      return;
-    }
-    setError("");
-    const samples = [
-      "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=600&q=80",
-      "https://images.unsplash.com/photo-1591561954557-26941169b49e?auto=format&fit=crop&w=600&q=80",
-    ];
-    setImages((prev) => [...prev, samples[prev.length % samples.length]]);
-  };
-
-  const removeImage = (idx: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== idx));
-    setError("");
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (images.length > 3) {
-      setError("Maximaal 3 afbeeldingen toegestaan.");
-      return;
-    }
     if (!name || !price) {
       setError("Vul a.u.b. alle verplichte velden in.");
       return;
@@ -70,6 +49,9 @@ export default function AddProductPage() {
 
     setIsSubmitting(true);
     try {
+      // TODO: upload each File in imageFiles to the Supabase `products`
+      // storage bucket here (PROMPT.md item 15), then pass the resulting
+      // public URLs as `images` below instead of an empty array.
       await api.createProduct({
         name,
         price: parseFloat(price),
@@ -78,7 +60,7 @@ export default function AddProductPage() {
         category,
         description,
         externalUrl: externalUrl || undefined,
-        images,
+        images: [],
         businessId: "bus-1",
         businessName: "Bag Shop Horn Center",
       });
@@ -112,39 +94,8 @@ export default function AddProductPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Product Images (Max 3 enforced) */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-bold text-[#111111]">Product Afbeeldingen (Max 3)</label>
-                <span className="text-xs font-bold text-[#B7B7B7]">{images.length} / 3 foto's</span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {images.map((img, idx) => (
-                  <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden bg-[#F9F9F9] border border-[#EAEAEA] group">
-                    <img src={img} alt="Preview" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(idx)}
-                      className="absolute top-1.5 right-1.5 p-1 bg-black/60 text-white rounded-full hover:bg-black transition-colors"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-
-                {images.length < 3 && (
-                  <button
-                    type="button"
-                    onClick={handleAddSampleImage}
-                    className="aspect-square rounded-2xl border-2 border-dashed border-[#DADADA] hover:border-[#FA1EFF] bg-[#F9F9F9] flex flex-col items-center justify-center gap-1 text-[#B7B7B7] hover:text-[#FA1EFF] transition-all"
-                  >
-                    <Upload className="w-6 h-6" />
-                    <span className="text-[11px] font-bold">+ Upload Foto</span>
-                  </button>
-                )}
-              </div>
-            </div>
+            {/* Product Images (Max 3 enforced) — manual upload only, PROMPT.md items 7 & 8 */}
+            <ImageUploader label="Product Images" maxImages={3} onChange={setImageFiles} />
 
             {/* Product Name */}
             <Input

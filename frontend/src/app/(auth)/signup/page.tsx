@@ -3,199 +3,221 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { User, Mail, Lock, Store, ShoppingBag, CheckCircle2 } from "lucide-react";
+import { User, Mail, Lock, Store, ShoppingBag } from "lucide-react";
 import { ConsumerLayout } from "@/layouts/ConsumerLayout";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/AuthContext";
-import { buildVerificationCode, isValidIdentifier } from "@/lib/identifier";
+import { ApiError } from "@/lib/api/client";
 import { UserRole } from "@/types/user";
+
+// Accepts either a valid email OR a phone number (loose E.164 / NL-style),
+// unlike the previous native type="email" input which rejected phone
+// numbers outright. See PROMPT.md item 2.
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_REGEX = /^\+?[0-9()\-.\s]{7,15}$/;
+
+function isEmail(value: string) {
+  return EMAIL_REGEX.test(value.trim());
+}
+function isPhone(value: string) {
+  return PHONE_REGEX.test(value.trim());
+}
+
+type Step = "form" | "role" | "verify";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { register, verifyCode, resendCode, pendingVerification } = useAuth();
 
   const [name, setName] = useState("");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const [enteredCode, setEnteredCode] = useState("");
-  const [verificationStep, setVerificationStep] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState<"email" | "sms">("email");
-  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [code, setCode] = useState("");
+
+  const [step, setStep] = useState<Step>("form");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    if (!name.trim() || !identifier.trim() || !password) {
-      setError("Please fill in all required fields.");
+    if (!name || !identifier || !password) {
+      setError("Vul a.u.b. alle verplichte velden in.");
       return;
     }
-
-    if (!isValidIdentifier(identifier)) {
-      setError("Use a valid email address or phone number.");
+    if (!isEmail(identifier) && !isPhone(identifier)) {
+      setError("Vul een geldig e-mailadres of telefoonnummer in.");
       return;
     }
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError("Wachtwoorden komen niet overeen.");
       return;
     }
-
-    const code = buildVerificationCode(identifier);
-    setVerificationCode(code);
-    setVerificationMethod(identifier.includes("@") ? "email" : "sms");
-    setVerificationStep(true);
+    setStep("role");
   };
 
-  const handleVerify = () => {
-    if (enteredCode.trim() !== verificationCode) {
-      setError("Incorrect verification code. Please try again.");
+  const handleRoleSelect = async (role: UserRole) => {
+    setSelectedRole(role);
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await register({
+        email: isEmail(identifier) ? identifier : undefined,
+        phone: isPhone(identifier) ? identifier : undefined,
+        password,
+        role,
+        displayName: name,
+      });
+      setStep("verify");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Registreren is mislukt. Probeer het opnieuw.");
+      setStep("form");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (code.length !== 6) {
+      setError("Voer de 6-cijferige code in.");
       return;
     }
-
-    setShowRoleModal(true);
-  };
-
-  const handleRoleSelect = (role: UserRole) => {
-    login(identifier, role);
-    setShowRoleModal(false);
-    if (role === "BUSINESS_OWNER") {
-      router.push("/onboarding/business");
-    } else {
-      router.push("/");
+    setIsSubmitting(true);
+    try {
+      await verifyCode(code);
+      if (selectedRole === "BUSINESS_OWNER") {
+        router.push("/onboarding/business");
+      } else {
+        router.push("/");
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Ongeldige code.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <ConsumerLayout>
-      <div className="mx-auto my-8 max-w-md bg-white p-6 sm:p-8 rounded-3xl border border-[#EAEAEA] shadow-md space-y-6">
-        <div className="text-center space-y-1">
-          <div className="w-12 h-12 rounded-full bg-[#FAE2F0] text-[#FA1EFF] flex items-center justify-center font-bold text-xl font-rubik mx-auto mb-3">
-            LS
-          </div>
-          <h1 className="text-2xl font-bold font-rubik text-[#111111]">Hi…</h1>
-          <p className="text-xs text-[#B7B7B7]">Let&apos;s create an account</p>
-        </div>
-
-        {error && (
-          <div className="p-3 bg-[#F2D9DE] text-[#E54666] text-xs font-bold rounded-xl text-center">
-            {error}
-          </div>
-        )}
-
-        {!verificationStep ? (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              label="Full Name"
-              placeholder="Sanne de Jong"
-              icon={<User className="w-4 h-4" />}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-
-            <Input
-              label="Email or Mobile"
-              type="text"
-              placeholder="naam@voorbeeld.nl or +31..."
-              icon={<Mail className="w-4 h-4" />}
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-            />
-
-            <Input
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              icon={<Lock className="w-4 h-4" />}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-
-            <Input
-              label="Confirm Password"
-              type="password"
-              placeholder="••••••••"
-              icon={<Lock className="w-4 h-4" />}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-            />
-
-            <Button type="submit" variant="primary" size="lg" fullWidth>
-              SIGN UP
-            </Button>
-          </form>
-        ) : (
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-[#EAEAEA] bg-[#F9F9F9] p-4 text-center">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-[#E3F8EB] text-[#1AAA5B]">
-                <CheckCircle2 className="h-6 w-6" />
-              </div>
-              <h2 className="text-lg font-bold text-[#111111]">
-                {verificationMethod === "email" ? "Check your email" : "Enter your OTP"}
-              </h2>
-              <p className="mt-1 text-xs text-[#B7B7B7]">
-                {verificationMethod === "email"
-                  ? `We sent a verification code to ${identifier}.`
-                  : `We sent a 6-digit code to ${identifier}.`}
-              </p>
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <div className="w-full max-w-sm mx-auto my-8 bg-white p-6 sm:p-7 rounded-3xl border border-[#EAEAEA] shadow-md space-y-5">
+          <div className="text-center space-y-1">
+            <div className="w-12 h-12 rounded-full bg-[#FAE2F0] text-[#FA1EFF] flex items-center justify-center font-bold text-xl font-rubik mx-auto mb-3">
+              LS
             </div>
-
-            <Input
-              label={verificationMethod === "email" ? "Verification code" : "OTP code"}
-              type="text"
-              inputMode="numeric"
-              placeholder="123456"
-              value={enteredCode}
-              onChange={(e) => setEnteredCode(e.target.value)}
-            />
-
-            <Button type="button" variant="primary" size="lg" fullWidth onClick={handleVerify}>
-              VERIFY
-            </Button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setEnteredCode("");
-                setVerificationCode(buildVerificationCode(identifier));
-                setError("A new code has been sent.");
-              }}
-              className="w-full text-center text-xs font-bold text-[#FA1EFF] hover:underline"
-            >
-              Resend code
-            </button>
+            <h1 className="text-2xl font-bold font-rubik text-[#111111]">Hi…</h1>
+            <p className="text-xs text-[#B7B7B7]">
+              {step === "verify" ? "Bevestig je account" : "Let's create an account"}
+            </p>
           </div>
-        )}
 
-        <div className="text-center pt-2">
-          <p className="text-xs text-[#B7B7B7]">
-            Have an account?{" "}
-            <Link href="/login" className="font-bold text-[#FA1EFF] hover:underline">
-              Log in here
-            </Link>
-          </p>
+          {error && (
+            <div className="p-3 bg-[#F2D9DE] text-[#E54666] text-xs font-bold rounded-xl text-center">
+              {error}
+            </div>
+          )}
+
+          {step === "form" && (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Input
+                label="Full Name"
+                placeholder="Sanne de Jong"
+                icon={<User className="w-4 h-4" />}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+
+              <Input
+                label="Email or Mobile"
+                type="text"
+                inputMode="email"
+                placeholder="naam@voorbeeld.nl of 06-12345678"
+                icon={<Mail className="w-4 h-4" />}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+              />
+
+              <Input
+                label="Password"
+                type="password"
+                placeholder="••••••••"
+                icon={<Lock className="w-4 h-4" />}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+
+              <Input
+                label="Confirm Password"
+                type="password"
+                placeholder="••••••••"
+                icon={<Lock className="w-4 h-4" />}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+
+              <Button type="submit" variant="primary" size="lg" fullWidth>
+                SIGN UP
+              </Button>
+            </form>
+          )}
+
+          {step === "verify" && (
+            <form onSubmit={handleVerify} className="space-y-4">
+              <p className="text-xs text-[#B7B7B7] text-center">
+                We hebben een 6-cijferige code gestuurd naar{" "}
+                <strong className="text-[#111111]">{pendingVerification?.identifier}</strong> via{" "}
+                {pendingVerification?.channel === "EMAIL" ? "e-mail" : "sms"}.
+              </p>
+              <Input
+                label="Verificatiecode"
+                type="text"
+                inputMode="numeric"
+                placeholder="123456"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              />
+              <Button type="submit" variant="primary" size="lg" fullWidth isLoading={isSubmitting}>
+                BEVESTIGEN
+              </Button>
+              <button
+                type="button"
+                onClick={() => resendCode()}
+                className="w-full text-xs font-bold text-[#FA1EFF] hover:underline text-center"
+              >
+                Code opnieuw versturen
+              </button>
+            </form>
+          )}
+
+          <div className="text-center pt-2">
+            <p className="text-xs text-[#B7B7B7]">
+              Have an account?{" "}
+              <Link href="/login" className="font-bold text-[#FA1EFF] hover:underline">
+                Log in here
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
 
-      {showRoleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+      {/* ACCOUNT TYPE MODAL */}
+      {step === "role" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
           <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-xl text-center space-y-5">
             <h2 className="text-lg font-bold font-rubik text-[#111111]">Choose your account type</h2>
-            <p className="text-xs text-[#B7B7B7]">How do you want to use LocalSpotter.nl?</p>
+            <p className="text-xs text-[#B7B7B7]">How do you plan to use LocalSpotter.nl?</p>
 
             <div className="space-y-3">
               <button
+                type="button"
+                disabled={isSubmitting}
                 onClick={() => handleRoleSelect("CONSUMER")}
-                className="w-full p-4 rounded-2xl border-2 border-[#FAE2F0] bg-[#F9F9F9] hover:bg-[#FAE2F0] hover:border-[#FA1EFF] text-left transition-all group"
+                className="w-full p-4 rounded-2xl border-2 border-[#FAE2F0] bg-[#F9F9F9] hover:bg-[#FAE2F0] hover:border-[#FA1EFF] text-left transition-all group disabled:opacity-50"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#FA1EFF] text-white flex items-center justify-center">
@@ -206,26 +228,26 @@ export default function SignupPage() {
                       I am a Consumer
                     </span>
                     <span className="block text-[11px] text-[#B7B7B7]">
-                      Discover stores, buy products, and follow workshops
+                      Discover shops, buy products &amp; attend workshops
                     </span>
                   </div>
                 </div>
               </button>
 
               <button
+                type="button"
+                disabled={isSubmitting}
                 onClick={() => handleRoleSelect("BUSINESS_OWNER")}
-                className="w-full p-4 rounded-2xl border-2 border-[#121F3E]/20 bg-[#F9F9F9] hover:bg-[#121F3E]/10 hover:border-[#121F3E] text-left transition-all group"
+                className="w-full p-4 rounded-2xl border-2 border-[#121F3E]/20 bg-[#F9F9F9] hover:bg-[#121F3E]/10 hover:border-[#121F3E] text-left transition-all group disabled:opacity-50"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-[#121F3E] text-white flex items-center justify-center">
                     <Store className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="block text-sm font-bold text-[#111111]">
-                      I am a Business Owner
-                    </span>
+                    <span className="block text-sm font-bold text-[#111111]">I am a Business Owner</span>
                     <span className="block text-[11px] text-[#B7B7B7]">
-                      Register my shop, sell products, and manage workshops
+                      Register my shop, sell products &amp; workshops
                     </span>
                   </div>
                 </div>

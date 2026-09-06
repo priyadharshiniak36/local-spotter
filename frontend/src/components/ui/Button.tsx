@@ -18,10 +18,17 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       fullWidth = false,
       children,
       disabled,
+      type = "button",
       ...props
     },
     ref
   ) => {
+    // Defaulting to type="button" prevents a Button used for a non-submit
+    // action (upload trigger, GPS lookup, "+" controls, etc.) inside a
+    // <form> from silently submitting/reloading the page — the root cause
+    // of the crash described in PROMPT.md item 7. Pages that want a submit
+    // button must pass type="submit" explicitly (the signup/login/
+    // onboarding forms already do).
     const baseStyles =
       "inline-flex items-center justify-center font-bold transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#FA1EFF] disabled:opacity-50 disabled:cursor-not-allowed select-none";
 
@@ -42,6 +49,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
+        type={type}
         disabled={disabled || isLoading}
         className={cn(
           baseStyles,

@@ -3,10 +3,13 @@ import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MinLength } from 'cl
 import { UserRole } from '@prisma/client';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'consument@example.nl', description: 'User email address' })
+  @ApiPropertyOptional({
+    example: 'consument@example.nl',
+    description: 'User email address. Either email or phone must be provided.',
+  })
+  @IsOptional()
   @IsEmail({}, { message: 'Geldig e-mailadres is verplicht' })
-  @IsNotEmpty({ message: 'E-mailadres mag niet leeg zijn' })
-  email: string;
+  email?: string;
 
   @ApiProperty({ example: 'Password123!', description: 'Minimum 8 characters' })
   @IsString()

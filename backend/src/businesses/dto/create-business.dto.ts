@@ -42,15 +42,10 @@ export class CreateBusinessDto {
   @IsNotEmpty({ message: 'Stad is verplicht' })
   city: string;
 
-  @ApiProperty({ example: 'Keizersgracht', description: 'Street address' })
+  @ApiProperty({ example: 'Keizersgracht 142, 1015 CX Amsterdam', description: 'Free-text location, optionally filled via GPS reverse-geocoding' })
   @IsString()
-  @IsNotEmpty({ message: 'Straatnaam is verplicht' })
-  street: string;
-
-  @ApiPropertyOptional({ example: '142', description: 'House number' })
-  @IsOptional()
-  @IsString()
-  houseNumber?: string;
+  @IsNotEmpty({ message: 'Locatie is verplicht' })
+  address: string;
 
   @ApiPropertyOptional({ example: '1015 CX', description: 'Postal code' })
   @IsOptional()

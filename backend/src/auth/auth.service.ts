@@ -17,25 +17,41 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    const email = dto.email?.toLowerCase().trim() || null;
+    const mobile = dto.phone?.trim() || null;
+
+    if (!email && !mobile) {
+      throw new BadRequestException('E-mailadres of telefoonnummer is verplicht');
+    }
+
     const existingUser = await this.prisma.user.findFirst({
-      where: { email: dto.email.toLowerCase() },
+      where: {
+        OR: [
+          ...(email ? [{ email }] : []),
+          ...(mobile ? [{ mobile }] : []),
+        ],
+      },
     });
 
     if (existingUser) {
-      throw new ConflictException('Er bestaat al een account met dit e-mailadres');
+      throw new ConflictException('Er bestaat al een account met dit e-mailadres of telefoonnummer');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
+    // Verification is pending until the OTP (mobile) or email link/code is confirmed.
+    // The frontend must call the not-yet-existing /auth/verify-email and /auth/verify-otp
+    // endpoints (see PROMPT item 2) before login is allowed for this account.
     const user = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          email: dto.email.toLowerCase(),
-          mobile: dto.phone || null,
+          email,
+          mobile,
           passwordHash,
           role: dto.role,
-          status: UserStatus.ACTIVE,
-          emailVerifiedAt: new Date(),
+          // Account stays PENDING_VERIFICATION until /auth/verify-email or
+          // /auth/verify-otp confirms the identifier used to sign up.
+          status: UserStatus.PENDING_VERIFICATION,
         },
       });
 
@@ -68,22 +84,104 @@ export class AuthService {
       });
     });
 
-    const token = this.generateJwt(user!);
+    const verificationChannel = email ? 'EMAIL' : 'MOBILE';
+    await this.issueVerificationCode(user!.id, verificationChannel);
 
     return {
-      accessToken: token,
+      pendingVerification: true,
+      verificationChannel,
+      identifier: email || mobile,
       user: this.sanitizeUser(user!),
     };
   }
 
-  async login(dto: LoginDto) {
-    const user = await this.prisma.user.findFirst({
-      where: { email: dto.email.toLowerCase() },
+  /**
+   * Generates a 6-digit code, stores it (hashed would be preferable in a
+   * real deployment) with a 10 minute expiry, and dispatches it through
+   * the relevant channel. Wire `MailProvider`/`SmsProvider` here once real
+   * providers (e.g. SendGrid / Twilio) are configured — for now the code
+   * is logged so it can be used in development/testing.
+   */
+  private async issueVerificationCode(userId: string, channel: 'EMAIL' | 'MOBILE') {
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { verificationCode: code, verificationCodeExpiresAt: expiresAt },
+    });
+
+    // TODO: replace with real MailProvider / SmsProvider dispatch.
+    // eslint-disable-next-line no-console
+    console.log(`[DEV] Verification code for user ${userId} via ${channel}: ${code}`);
+
+    return { code, expiresAt };
+  }
+
+  async resendVerificationCode(identifier: string) {
+    const user = await this.findByIdentifier(identifier);
+    if (!user || user.status !== UserStatus.PENDING_VERIFICATION) {
+      return { message: 'Als het account bestaat en nog niet geverifieerd is, is er een nieuwe code verzonden.' };
+    }
+    const channel = user.email ? 'EMAIL' : 'MOBILE';
+    await this.issueVerificationCode(user.id, channel);
+    return { message: 'Als het account bestaat en nog niet geverifieerd is, is er een nieuwe code verzonden.' };
+  }
+
+  async verifyCode(identifier: string, code: string) {
+    const user = await this.findByIdentifier(identifier);
+
+    if (!user || !user.verificationCode || !user.verificationCodeExpiresAt) {
+      throw new BadRequestException('Ongeldige of verlopen verificatiecode');
+    }
+
+    if (user.verificationCode !== code || user.verificationCodeExpiresAt < new Date()) {
+      throw new BadRequestException('Ongeldige of verlopen verificatiecode');
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        status: UserStatus.ACTIVE,
+        verificationCode: null,
+        verificationCodeExpiresAt: null,
+        emailVerifiedAt: user.email ? new Date() : user.emailVerifiedAt,
+        mobileVerifiedAt: user.mobile ? new Date() : user.mobileVerifiedAt,
+      },
+      include: { consumerProfile: true, businessOwnerProfile: true },
+    });
+
+    const token = this.generateJwt(updated);
+
+    return {
+      accessToken: token,
+      user: this.sanitizeUser(updated),
+    };
+  }
+
+  /**
+   * Looks a user up by whatever identifier they typed in — email, mobile
+   * number, or username (admin accounts use username, see prisma seed).
+   */
+  private async findByIdentifier(identifier: string) {
+    const value = identifier.trim();
+    return this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: value.toLowerCase() },
+          { mobile: value },
+          { username: value },
+        ],
+      },
       include: {
         consumerProfile: true,
         businessOwnerProfile: true,
       },
     });
+  }
+
+  async login(dto: LoginDto) {
+    const user = await this.findByIdentifier(dto.identifier);
 
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Ongeldige inloggegevens');
@@ -96,6 +194,12 @@ export class AuthService {
 
     if (user.status === UserStatus.SUSPENDED || user.status === UserStatus.DELETED) {
       throw new UnauthorizedException('Account is geschorst of gedeactiveerd');
+    }
+
+    if (user.status === UserStatus.PENDING_VERIFICATION) {
+      throw new UnauthorizedException(
+        'Account is nog niet geverifieerd. Controleer je e-mail of telefoon voor de verificatiecode.',
+      );
     }
 
     await this.prisma.user.update({
@@ -214,6 +318,8 @@ export class AuthService {
     return {
       id: user.id,
       email: user.email,
+      username: user.username,
+      mobile: user.mobile,
       role: user.role,
       status: user.status,
       displayName,

@@ -27,6 +27,8 @@ export interface Business {
   heroImageUrl?: string;
   category: string;
   shopType: string;
+  /** Real value should come from GET /businesses/:id/subscription (backend/src/subscriptions) — see PROMPT.md items 5 & 6. */
+  subscriptionTier?: "WEBSHOP" | "SHOPROUTES" | "WORKSHOP";
   description: string;
   phone: string;
   email?: string;

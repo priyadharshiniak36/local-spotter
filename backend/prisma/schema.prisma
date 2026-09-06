@@ -146,11 +146,14 @@ model User {
   id                String       @id @default(uuid()) @db.Uuid
   email             String?      @unique
   mobile            String?      @unique
+  username          String?      @unique
   passwordHash      String?      @map("password_hash")
   role              UserRole
   status            UserStatus   @default(ACTIVE)
   emailVerifiedAt   DateTime?    @map("email_verified_at")
   mobileVerifiedAt  DateTime?    @map("mobile_verified_at")
+  verificationCode  String?      @map("verification_code")
+  verificationCodeExpiresAt DateTime? @map("verification_code_expires_at")
   lastLoginAt       DateTime?    @map("last_login_at")
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
@@ -263,6 +266,14 @@ model Business {
   street         String
   houseNumber    String?        @map("house_number")
   postalCode     String?        @map("postal_code")
+  // NOTE: `street`/`houseNumber` are kept internally for backward
+  // compatibility with existing rows, but the frontend onboarding form
+  // (PROMPT.md item 4) now collects a single free-text `address` field
+  // (optionally filled via GPS reverse-geocoding) instead of two separate
+  // inputs. New code should read/write `address`; `street` is populated
+  // from it for storage-layer compatibility until a full migration
+  // consolidates these columns.
+  address        String?
   countryCode    String         @default("NL") @map("country_code")
   latitude       Decimal?       @db.Decimal(9, 6)
   longitude      Decimal?       @db.Decimal(9, 6)

@@ -3,11 +3,13 @@ export type UserRole = "PUBLIC" | "CONSUMER" | "BUSINESS_OWNER" | "SUPER_ADMIN";
 export interface User {
   id: string;
   name: string;
-  email: string;
+  email?: string;
+  username?: string;
   phone?: string;
   role: UserRole;
   avatarUrl?: string;
   createdAt: string;
+  onboardingComplete?: boolean;
 }
 
 export interface ConsumerProfile {

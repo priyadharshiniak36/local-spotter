@@ -53,6 +53,7 @@ This is the **Frontend Web Application** for **LocalSpotter.nl MVP**, built acco
 - **API Boundary Client**: `src/lib/api/index.ts` exposes async methods (`getProducts`, `getBusinesses`, `createProduct`, `bookWorkshop`, `updateOrderStatus`, etc.) backed by typed mock data.
 - **Domain Types**: Clean TypeScript models in `src/types/` (`product.ts`, `business.ts`, `order.ts`, `workshop.ts`, `shoproute.ts`, `user.ts`, `subscription.ts`, `review.ts`).
 - **Mock Data Layer**: Structured data in `src/data/mock/` representing realistic Dutch local businesses, products, workshops, and shoproutes.
+- **Dev Role Toggle**: Interactive banner at the top of the app (`DevRoleBar`) to seamlessly switch between `PUBLIC`, `CONSUMER`, `BUSINESS_OWNER`, and `SUPER_ADMIN` roles during testing.
 
 ---
 
