@@ -3,17 +3,18 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, LogIn } from "lucide-react";
+import { Mail, Lock } from "lucide-react";
 import { ConsumerLayout } from "@/layouts/ConsumerLayout";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/features/auth/AuthContext";
+import { isValidIdentifier } from "@/lib/identifier";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, setRole } = useAuth();
+  const { login } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -21,23 +22,29 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!email || !password) {
-      setError("Vul a.u.b. alle velden in.");
+
+    const trimmedIdentifier = identifier.trim();
+    if (!trimmedIdentifier || !password) {
+      setError("Please fill in all fields.");
+      return;
+    }
+
+    if (!isValidIdentifier(trimmedIdentifier)) {
+      setError("Enter a valid email address or phone number.");
       return;
     }
 
     setIsLoading(true);
     setTimeout(() => {
-      login(email, "CONSUMER");
+      login(trimmedIdentifier, "CONSUMER");
       setIsLoading(false);
       router.push("/");
-    }, 400);
+    }, 350);
   };
 
   return (
     <ConsumerLayout>
-      <div className="max-w-md mx-auto my-8 bg-white p-6 sm:p-8 rounded-3xl border border-[#EAEAEA] shadow-md space-y-6">
-        {/* Header Graphic / Welcome */}
+      <div className="mx-auto my-8 max-w-md bg-white p-6 sm:p-8 rounded-3xl border border-[#EAEAEA] shadow-md space-y-6">
         <div className="text-center space-y-1">
           <img
             src="/logo.png"
@@ -57,11 +64,11 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input
             label="Email or Mobile"
-            type="email"
-            placeholder="naam@voorbeeld.nl"
+            type="text"
+            placeholder="naam@voorbeeld.nl or +31..."
             icon={<Mail className="w-4 h-4" />}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
           />
 
           <Input
@@ -74,11 +81,8 @@ export default function LoginPage() {
           />
 
           <div className="flex justify-end">
-            <Link
-              href="/forgot-password"
-              className="text-xs font-bold text-[#FA1EFF] hover:underline"
-            >
-              Wachtwoord vergeten?
+            <Link href="/forgot-password" className="text-xs font-bold text-[#FA1EFF] hover:underline">
+              Forgot password?
             </Link>
           </div>
 
@@ -87,7 +91,6 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        {/* OAuth Separator */}
         <div className="relative flex items-center justify-center my-4">
           <div className="border-t border-[#EAEAEA] w-full" />
           <span className="bg-white px-3 text-xs text-[#B7B7B7] uppercase font-bold absolute">
@@ -95,7 +98,6 @@ export default function LoginPage() {
           </span>
         </div>
 
-        {/* Social Buttons */}
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => {
@@ -117,10 +119,9 @@ export default function LoginPage() {
           </button>
         </div>
 
-        {/* Signup Link */}
         <div className="text-center pt-2">
           <p className="text-xs text-[#B7B7B7]">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="font-bold text-[#FA1EFF] hover:underline">
               Sign up here
             </Link>

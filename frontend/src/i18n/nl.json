@@ -1,0 +1,14 @@
+{
+  "login": "Inloggen",
+  "logout": "Uitloggen",
+  "signUp": "Registreren",
+  "fullName": "Volledige naam",
+  "emailOrMobile": "E-mail of mobiel",
+  "password": "Wachtwoord",
+  "confirmPassword": "Bevestig wachtwoord",
+  "forgotPassword": "Wachtwoord vergeten?",
+  "chooseAccountType": "Kies je account type",
+  "consumer": "Ik ben een consument",
+  "businessOwner": "Ik ben een ondernemer",
+  "resendCode": "Code opnieuw verzenden"
+}

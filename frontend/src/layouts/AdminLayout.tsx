@@ -16,7 +16,6 @@ import {
   LogOut,
 } from "lucide-react";
 import { TopNav } from "@/components/navigation/TopNav";
-import { DevRoleBar } from "@/components/navigation/DevRoleBar";
 import { useAuth } from "@/features/auth/AuthContext";
 
 export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -37,7 +36,6 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F9F9F9]">
-      <DevRoleBar />
       <TopNav />
 
       <div className="flex-1 flex max-w-7xl w-full mx-auto">

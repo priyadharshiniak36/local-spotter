@@ -5,12 +5,10 @@ import { TopNav } from "@/components/navigation/TopNav";
 import { AppHeader } from "@/components/navigation/AppHeader";
 import { BottomNav } from "@/components/navigation/BottomNav";
 import { OwnerSidebar } from "@/components/navigation/OwnerSidebar";
-import { DevRoleBar } from "@/components/navigation/DevRoleBar";
 
 export const OwnerLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
     <div className="min-h-screen flex flex-col bg-[#F9F9F9]">
-      <DevRoleBar />
       <div className="md:hidden">
         <AppHeader title="Ondernemer Portal" />
       </div>
