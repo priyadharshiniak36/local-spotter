@@ -6,7 +6,8 @@ import { MessageSquarePlus } from "lucide-react";
 const REGISTRATION_FORM_URL =
   "https://local-spotter-registration-form-xi.vercel.app/";
 
-const BUTTON_SIZE = 56; // px
+const BUTTON_WIDTH = 140; // px — wider now that it shows a text label
+const BUTTON_HEIGHT = 48; // px
 const EDGE_MARGIN = 16; // px, keeps the button from touching the very edge
 const DRAG_THRESHOLD = 6; // px of movement before a press counts as a drag
 const STORAGE_KEY = "local-spotter:feedback-button-position";
@@ -15,8 +16,8 @@ type Position = { x: number; y: number };
 
 function clampPosition(pos: Position): Position {
   if (typeof window === "undefined") return pos;
-  const maxX = window.innerWidth - BUTTON_SIZE - EDGE_MARGIN;
-  const maxY = window.innerHeight - BUTTON_SIZE - EDGE_MARGIN;
+  const maxX = window.innerWidth - BUTTON_WIDTH - EDGE_MARGIN;
+  const maxY = window.innerHeight - BUTTON_HEIGHT - EDGE_MARGIN;
   return {
     x: Math.min(Math.max(pos.x, EDGE_MARGIN), Math.max(maxX, EDGE_MARGIN)),
     y: Math.min(Math.max(pos.y, EDGE_MARGIN), Math.max(maxY, EDGE_MARGIN)),
@@ -26,8 +27,8 @@ function clampPosition(pos: Position): Position {
 function defaultPosition(): Position {
   if (typeof window === "undefined") return { x: 0, y: 0 };
   return clampPosition({
-    x: window.innerWidth - BUTTON_SIZE - EDGE_MARGIN,
-    y: window.innerHeight - BUTTON_SIZE - EDGE_MARGIN,
+    x: window.innerWidth - BUTTON_WIDTH - EDGE_MARGIN,
+    y: window.innerHeight - BUTTON_HEIGHT - EDGE_MARGIN,
   });
 }
 
@@ -132,14 +133,15 @@ export const FeedbackButton: React.FC = () => {
       onClick={handleClick}
       aria-label="Feedback geven / winkel aanmelden"
       title="Feedback"
-      className="fixed z-[60] grid h-14 w-14 touch-none place-items-center rounded-full bg-[#FA1EFF] text-white shadow-xl ring-4 ring-white transition-transform hover:scale-105 active:scale-95"
+      className="fixed z-[60] flex touch-none items-center gap-2 rounded-full bg-[#FA1EFF] px-5 py-3 text-white shadow-xl ring-4 ring-white transition-transform hover:scale-105 active:scale-95"
       style={{
         left: position.x,
         top: position.y,
         cursor: isDragging ? "grabbing" : "grab",
       }}
     >
-      <MessageSquarePlus className="h-6 w-6" aria-hidden="true" />
+      <MessageSquarePlus className="h-5 w-5 shrink-0" aria-hidden="true" />
+      <span className="text-sm font-semibold whitespace-nowrap">Feedback</span>
     </button>
   );
 };
